@@ -47,8 +47,25 @@ export default function AllPerks() {
     // This effect depends on [perks], so it re-runs whenever perks changes
   }, [perks]) // Dependency: re-run when perks array changes
 
+
+  useEffect(() => {
+    loadAllPerks()
+  }, [])
+
+  // Auto-search: whenever searchQuery or merchantFilter change, reload perks.
+  // Debounce to avoid firing API calls on every keystroke immediately.
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      loadAllPerks()
+    }, 350)
+
+    return () => clearTimeout(handle)
+    // We intentionally include loadAllPerks here since it's stable for this component.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, merchantFilter])
+
   
-  async function loadAllPerks() {
+  async function loadAllPerks(overrides = {}) {
     // Reset error state before new request
     setError('')
     
@@ -59,10 +76,10 @@ export default function AllPerks() {
       // Make GET request to /api/perks/all with query parameters
       const res = await api.get('/perks/all', {
         params: {
-          // Only include search param if searchQuery is not empty
-          search: searchQuery.trim() || undefined,
-          // Only include merchant param if merchantFilter is not empty
-          merchant: merchantFilter.trim() || undefined
+          // Only include search param if provided (overrides take precedence)
+          search: (overrides.search !== undefined ? overrides.search : searchQuery).trim() || undefined,
+          // Only include merchant param if provided (overrides take precedence)
+          merchant: (overrides.merchant !== undefined ? overrides.merchant : merchantFilter).trim() || undefined
         }
       })
       
@@ -100,6 +117,11 @@ export default function AllPerks() {
     // will automatically trigger and reload all perks
     setSearchQuery('')
     setMerchantFilter('')
+
+    // Immediately request all perks from the server. We pass explicit
+    // empty strings as overrides so loadAllPerks ignores prior state
+    // (setState is async) and fetches the full list.
+    loadAllPerks({ search: '', merchant: '' })
   }
 
   
@@ -136,7 +158,8 @@ export default function AllPerks() {
                 type="text"
                 className="input"
                 placeholder="Enter perk name..."
-                
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
               />
               <p className="text-xs text-zinc-500 mt-1">
                 Auto-searches as you type, or press Enter / click Search
@@ -151,7 +174,8 @@ export default function AllPerks() {
               </label>
               <select
                 className="input"
-                
+                value={merchantFilter}
+                onChange={e => setMerchantFilter(e.target.value)}
               >
                 <option value="">All Merchants</option>
                 
@@ -198,7 +222,7 @@ export default function AllPerks() {
               <span className="material-symbols-outlined">error</span>
               <p>{error}</p>
             </div>
-            <button onClick={loadAllPerks} className="btn text-sm">
+            <button onClick={() => loadAllPerks()} className="btn text-sm">
               Try Again
             </button>
           </div>
